@@ -85,7 +85,7 @@ async function handleMatchCommand(message, game, playersStr, time) {
   const embed = buildEmbed(game, players, time, []);
   const sent = await gamingChannel.send({ embeds: [embed] });
   await sent.react('👍');
-  matchData.set(sent.id, { players, joined: [] });
+  matchData.set(sent.id, { players, joined: [], game, time, locked: false });
   if (message.reply) return message.reply({ content: 'Match posted!', ephemeral: true });
 }
 
@@ -113,14 +113,25 @@ async function updateJoined(reaction, user, add) {
   const member = await guild.members.fetch(user.id);
   const name = member.displayName;
   const joined = data.joined;
+
   if (add) {
     if (!joined.includes(name)) joined.push(name);
   } else {
     const idx = joined.indexOf(name);
     if (idx !== -1) joined.splice(idx, 1);
   }
-  const embed = buildEmbed(reaction.message.embeds[0]?.title.split(': ')[1] || '', data.players, reaction.message.embeds[0]?.fields[1].value, joined);
+
+  const embed = buildEmbed(data.game, data.players, data.time, joined);
   await reaction.message.edit({ embeds: [embed] });
+
+  const existing = reaction.message.reactions.cache.find(r => r.emoji.name === '👍');
+  if (joined.length >= data.players) {
+    if (existing) await existing.remove();
+    data.locked = true;
+  } else if (data.locked) {
+    await reaction.message.react('👍');
+    data.locked = false;
+  }
 }
 
 client.on(Events.MessageReactionAdd, async (reaction, user) => {
